@@ -1,0 +1,24 @@
+{
+  "lastProcessedStarredAt": "2026-11-11T16:45:00Z",
+  "processedUserIds": [
+    2001,
+    2002,
+    2003,
+    2004,
+    2005
+  ],
+  "auditLog": [
+    {
+      "status": "NOTIFIED",
+      "dispatched_at": "2026-11-11T15:22:51.860Z",
+      "starred_at": "2026-11-11T10:00:00Z",
+      "lead_id": 2001,
+      "login": "sarah-lead",
+      "followers": 450,
+      "public_repos": 12,
+      "company": "@CyberdyneAI",
+      "ai_pitch": "As Staff Platform Architect at CyberdyneAI with 450 followers, Sarah possesses direct decision-making authority over enterprise infrastructure adoption."
+    }
+  ]
+}
+

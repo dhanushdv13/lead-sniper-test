@@ -1,0 +1,19 @@
+{
+  "name": "lead-sniper",
+  "version": "1.0.0",
+  "description": "AI-Powered GitHub Lead Generation System for n8n",
+  "scripts": {
+    "test": "node scripts/test_delta_detection.js && node scripts/test_qualification.js && node scripts/test_gemini_sanitizer.js && node scripts/test_discord_payload.js && node scripts/validate_and_simulate_e2e.js",
+    "validate": "node scripts/validate_and_simulate_e2e.js"
+  },
+  "keywords": [
+    "n8n",
+    "lead-generation",
+    "github",
+    "gemini",
+    "discord",
+    "automation"
+  ],
+  "license": "MIT"
+}
+

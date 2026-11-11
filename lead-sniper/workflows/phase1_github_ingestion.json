@@ -1,0 +1,263 @@
+{
+  "name": "Lead Sniper - Phase 1: GitHub Ingestion & State Management",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e30e1a12-881e-4c74-a032-1b111c110001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "e30e1a12-881e-4c74-a032-1b111c110002",
+      "name": "Schedule Trigger (Every 15m)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "owner",
+              "value": "={{ $env.GITHUB_OWNER || 'octocat' }}",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "repo",
+              "value": "={{ $env.GITHUB_REPO || 'Hello-World' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "bootstrapBatchSize",
+              "value": 5,
+              "type": "number"
+            },
+            {
+              "id": "c4",
+              "name": "maxHistory",
+              "value": 1000,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e30e1a12-881e-4c74-a032-1b111c110003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "LeadSniper-n8n"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 2000
+            }
+          }
+        }
+      },
+      "id": "e30e1a12-881e-4c74-a032-1b111c110004",
+      "name": "Get Repo Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const repoInfo = $json;\nconst config = $('Config').first().json;\nconst count = repoInfo.stargazers_count || 0;\nconst perPage = 100;\nconst targetPage = Math.max(1, Math.ceil(count / perPage));\n\nreturn [{\n  json: {\n    owner: config.owner,\n    repo: config.repo,\n    bootstrapBatchSize: config.bootstrapBatchSize || 5,\n    maxHistory: config.maxHistory || 1000,\n    stargazers_count: count,\n    targetPage: targetPage,\n    perPage: perPage\n  }\n}];"
+      },
+      "id": "e30e1a12-881e-4c74-a032-1b111c110005",
+      "name": "Calculate Stargazer Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/stargazers",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "={{ $json.perPage }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.targetPage }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.star+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "LeadSniper-n8n"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 2000
+            }
+          }
+        }
+      },
+      "id": "e30e1a12-881e-4c74-a032-1b111c110006",
+      "name": "Fetch Stargazers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Delta Detection & Persistent State Node\n * Reads persistent state via $getWorkflowStaticData('global')\n * Filters incoming stargazers to emit only genuinely new leads\n */\nconst staticData = $getWorkflowStaticData('global');\nstaticData.lastProcessedStarredAt = staticData.lastProcessedStarredAt || null;\nstaticData.processedUserIds = staticData.processedUserIds || [];\n\nconst rawItems = $input.all();\nconst config = $('Config').first().json;\nconst bootstrapLimit = config.bootstrapBatchSize || 5;\nconst maxHistory = config.maxHistory || 1000;\n\n// Flatten stargazers list\nlet stargazers = [];\nfor (const item of rawItems) {\n  if (Array.isArray(item.json)) {\n    stargazers.push(...item.json);\n  } else if (item.json && item.json.user && item.json.starred_at) {\n    stargazers.push(item.json);\n  }\n}\n\n// Sort chronologically ascending\nstargazers.sort((a, b) => new Date(a.starred_at) - new Date(b.starred_at));\n\nconst processedSet = new Set(staticData.processedUserIds);\nconst newLeads = [];\nlet latestTimestamp = staticData.lastProcessedStarredAt;\n\nif (!staticData.lastProcessedStarredAt) {\n  // Initial Run: Bootstrap up to the latest batch\n  const batch = stargazers.slice(-bootstrapLimit);\n  for (const star of batch) {\n    if (star.user && !processedSet.has(star.user.id)) {\n      newLeads.push(star);\n      processedSet.add(star.user.id);\n      if (!latestTimestamp || new Date(star.starred_at) > new Date(latestTimestamp)) {\n        latestTimestamp = star.starred_at;\n      }\n    }\n  }\n} else {\n  // Subsequent Runs: Strictly new stars\n  const lastCutoff = new Date(staticData.lastProcessedStarredAt);\n  for (const star of stargazers) {\n    if (!star.user) continue;\n    const starTime = new Date(star.starred_at);\n    const isNew = starTime > lastCutoff;\n    const notSeen = !processedSet.has(star.user.id);\n\n    if (isNew && notSeen) {\n      newLeads.push(star);\n      processedSet.add(star.user.id);\n      if (!latestTimestamp || starTime > new Date(latestTimestamp)) {\n        latestTimestamp = star.starred_at;\n      }\n    }\n  }\n}\n\n// Cap history to maxHistory\nlet updatedIds = Array.from(processedSet);\nif (updatedIds.length > maxHistory) {\n  updatedIds = updatedIds.slice(-maxHistory);\n}\n\n// Commit persistent state\nstaticData.lastProcessedStarredAt = latestTimestamp;\nstaticData.processedUserIds = updatedIds;\n\n// Return each new stargazer as a separate n8n item\nreturn newLeads.map(lead => ({\n  json: {\n    starred_at: lead.starred_at,\n    user: lead.user,\n    login: lead.user.login,\n    id: lead.user.id,\n    avatar_url: lead.user.avatar_url,\n    html_url: lead.user.html_url\n  }\n}));"
+      },
+      "id": "e30e1a12-881e-4c74-a032-1b111c110007",
+      "name": "Filter New Stargazers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (Every 15m)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get Repo Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Repo Info": {
+      "main": [
+        [
+          {
+            "node": "Calculate Stargazer Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Stargazer Page": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stargazers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stargazers": {
+      "main": [
+        [
+          {
+            "node": "Filter New Stargazers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

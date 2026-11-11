@@ -1,0 +1,205 @@
+{
+  "name": "Lead Sniper - Phase 2: Profile Enrichment & Qualification Logic",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://api.github.com/users/{{ $json.login }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "LeadSniper-n8n"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 2000
+            }
+          }
+        }
+      },
+      "id": "e30e1a12-881e-4c74-a032-2b111c110001",
+      "name": "Fetch User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "login",
+              "value": "={{ $json.login }}",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "name",
+              "value": "={{ $json.name || $json.login }}",
+              "type": "string"
+            },
+            {
+              "id": "p3",
+              "name": "company",
+              "value": "={{ $json.company || 'Not specified' }}",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "bio",
+              "value": "={{ $json.bio || 'Not specified' }}",
+              "type": "string"
+            },
+            {
+              "id": "p5",
+              "name": "location",
+              "value": "={{ $json.location || 'Remote / Unspecified' }}",
+              "type": "string"
+            },
+            {
+              "id": "p6",
+              "name": "followers",
+              "value": "={{ Number($json.followers) || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "p7",
+              "name": "public_repos",
+              "value": "={{ Number($json.public_repos) || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "p8",
+              "name": "html_url",
+              "value": "={{ $json.html_url }}",
+              "type": "string"
+            },
+            {
+              "id": "p9",
+              "name": "avatar_url",
+              "value": "={{ $json.avatar_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e30e1a12-881e-4c74-a032-2b111c110002",
+      "name": "Normalize Profile Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_followers",
+              "leftValue": "={{ $json.followers }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "c_repos",
+              "leftValue": "={{ $json.public_repos }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "e30e1a12-881e-4c74-a032-2b111c110003",
+      "name": "Qualification Filter (followers > 100 OR repos > 50)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        340
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e30e1a12-881e-4c74-a032-2b111c110004",
+      "name": "Stop - Unqualified Lead",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        980,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Fetch User Profile": {
+      "main": [
+        [
+          {
+            "node": "Normalize Profile Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Profile Data": {
+      "main": [
+        [
+          {
+            "node": "Qualification Filter (followers > 100 OR repos > 50)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualification Filter (followers > 100 OR repos > 50)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Stop - Unqualified Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
+

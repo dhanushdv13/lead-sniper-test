@@ -1,0 +1,139 @@
+[
+  {
+    "id": 2001,
+    "login": "sarah-lead",
+    "name": "Sarah Connor",
+    "company": "@CyberdyneAI",
+    "bio": "Staff Platform Architect building autonomous cloud tooling. Ex-Google.",
+    "location": "San Francisco, CA",
+    "blog": "https://sarah.dev",
+    "followers": 450,
+    "public_repos": 12,
+    "html_url": "https://github.com/sarah-lead",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2001?v=4",
+    "_expected": {
+      "qualifies": true,
+      "reason": "followers (450) > 100"
+    }
+  },
+  {
+    "id": 2002,
+    "login": "alex-oss",
+    "name": "Alex Rivera",
+    "company": "Independent Open Source",
+    "bio": "Creator of 50+ CLI developer utilities, Rust and TypeScript fanatic.",
+    "location": "Berlin, Germany",
+    "blog": "https://alexrivera.io",
+    "followers": 45,
+    "public_repos": 82,
+    "html_url": "https://github.com/alex-oss",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2002?v=4",
+    "_expected": {
+      "qualifies": true,
+      "reason": "public_repos (82) > 50"
+    }
+  },
+  {
+    "id": 2003,
+    "login": "elena-cto",
+    "name": "Elena Rostova",
+    "company": "@DevFlowHQ",
+    "bio": "CTO & Co-founder @DevFlowHQ. Scaled pipelines for 1M+ developers.",
+    "location": "London, UK",
+    "blog": "https://devflow.io",
+    "followers": 1250,
+    "public_repos": 94,
+    "html_url": "https://github.com/elena-cto",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2003?v=4",
+    "_expected": {
+      "qualifies": true,
+      "reason": "followers (1250) > 100 AND public_repos (94) > 50"
+    }
+  },
+  {
+    "id": 2004,
+    "login": "boundary-strict-equal",
+    "name": "Boundary Test 100-50",
+    "company": null,
+    "bio": "Checking boundary where values equal 100 and 50 exactly.",
+    "location": "Remote",
+    "blog": "",
+    "followers": 100,
+    "public_repos": 50,
+    "html_url": "https://github.com/boundary-strict-equal",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2004?v=4",
+    "_expected": {
+      "qualifies": false,
+      "reason": "Condition is strictly > (100 is not > 100, 50 is not > 50)"
+    }
+  },
+  {
+    "id": 2005,
+    "login": "boundary-101-followers",
+    "name": "Boundary Test 101 Followers",
+    "company": "Tech Labs",
+    "bio": "Minimal repos but followers surpass threshold.",
+    "location": "New York, NY",
+    "blog": "",
+    "followers": 101,
+    "public_repos": 10,
+    "html_url": "https://github.com/boundary-101-followers",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2005?v=4",
+    "_expected": {
+      "qualifies": true,
+      "reason": "followers (101) > 100"
+    }
+  },
+  {
+    "id": 2006,
+    "login": "boundary-51-repos",
+    "name": "Boundary Test 51 Repos",
+    "company": "Dev Solutions",
+    "bio": "Minimal followers but repositories surpass threshold.",
+    "location": "Toronto, Canada",
+    "blog": "",
+    "followers": 10,
+    "public_repos": 51,
+    "html_url": "https://github.com/boundary-51-repos",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2006?v=4",
+    "_expected": {
+      "qualifies": true,
+      "reason": "public_repos (51) > 50"
+    }
+  },
+  {
+    "id": 2007,
+    "login": "casual-dev",
+    "name": "Casual User",
+    "company": null,
+    "bio": "Junior web dev learning Python and React.",
+    "location": "Austin, TX",
+    "blog": "",
+    "followers": 8,
+    "public_repos": 14,
+    "html_url": "https://github.com/casual-dev",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2007?v=4",
+    "_expected": {
+      "qualifies": false,
+      "reason": "followers (8) <= 100 AND public_repos (14) <= 50"
+    }
+  },
+  {
+    "id": 2008,
+    "login": "zero-stats-user",
+    "name": null,
+    "company": null,
+    "bio": null,
+    "location": null,
+    "blog": null,
+    "followers": 0,
+    "public_repos": 0,
+    "html_url": "https://github.com/zero-stats-user",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2008?v=4",
+    "_expected": {
+      "qualifies": false,
+      "reason": "followers (0) <= 100 AND public_repos (0) <= 50"
+    }
+  }
+]
+

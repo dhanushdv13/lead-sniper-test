@@ -1,0 +1,93 @@
+{
+  "name": "Lead Sniper - Phase 4: Discord Dispatch & Persistence",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "/**\n * Format Discord Rich Embed\n * Formats the qualified lead and Gemini pitch into a structured Discord embed\n */\nconst lead = $json;\nconst config = $('Config').first()?.json || { owner: 'octocat', repo: 'Hello-World' };\n\nconst payload = {\n  username: 'Lead Sniper Bot',\n  avatar_url: 'https://cdn-icons-png.flaticon.com/512/3242/3242257.png',\n  embeds: [\n    {\n      title: `🎯 High-Value GitHub Lead: @${lead.login}`,\n      url: lead.html_url || `https://github.com/${lead.login}`,\n      color: 3066993, // 0x2ECC71 (Emerald Green)\n      author: {\n        name: `${lead.name || lead.login} (@${lead.login})`,\n        url: lead.html_url || `https://github.com/${lead.login}`,\n        icon_url: lead.avatar_url || ''\n      },\n      thumbnail: {\n        url: lead.avatar_url || ''\n      },\n      description: `💡 **AI Lead Angle:**\\n${lead.ai_pitch}`,\n      fields: [\n        {\n          name: '🏢 Company',\n          value: lead.company && lead.company !== 'Not specified' ? lead.company : 'Not specified',\n          inline: true\n        },\n        {\n          name: '👥 Followers',\n          value: String(lead.followers ?? 0),\n          inline: true\n        },\n        {\n          name: '📦 Public Repos',\n          value: String(lead.public_repos ?? 0),\n          inline: true\n        },\n        {\n          name: '📍 Location',\n          value: lead.location && lead.location !== 'Remote / Unspecified' ? lead.location : 'Remote / Unspecified',\n          inline: true\n        },\n        {\n          name: '📝 Bio',\n          value: lead.bio && lead.bio !== 'Not specified' ? lead.bio : 'No bio provided',\n          inline: false\n        }\n      ],\n      footer: {\n        text: `Lead Sniper • Target: ${config.owner}/${config.repo}`\n      },\n      timestamp: new Date().toISOString()\n    }\n  ]\n};\n\nreturn [{\n  json: {\n    ...lead,\n    discord_payload: payload\n  }\n}];"
+      },
+      "id": "e30e1a12-881e-4c74-a032-4b111c110001",
+      "name": "Format Discord Embed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.discord_payload) }}",
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 2000
+            }
+          }
+        }
+      },
+      "id": "e30e1a12-881e-4c74-a032-4b111c110002",
+      "name": "Send Discord Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Audit Log & State Confirmation Node\n * Confirms delivery of lead and logs audit record\n */\nconst lead = $('Format Discord Embed').first().json;\nreturn [{\n  json: {\n    status: 'NOTIFIED',\n    dispatched_at: new Date().toISOString(),\n    lead_id: lead.id,\n    login: lead.login,\n    followers: lead.followers,\n    public_repos: lead.public_repos,\n    company: lead.company,\n    ai_pitch: lead.ai_pitch\n  }\n}];"
+      },
+      "id": "e30e1a12-881e-4c74-a032-4b111c110003",
+      "name": "Audit & Commit Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Format Discord Embed": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Notification": {
+      "main": [
+        [
+          {
+            "node": "Audit & Commit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
+

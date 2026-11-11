@@ -1,0 +1,687 @@
+{
+  "name": "Lead Sniper - AI-Powered GitHub Lead Generation System",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-01-manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        180,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "node-02-schedule-trigger",
+      "name": "Schedule Trigger (Every 15m)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        180,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "githubOwner",
+              "value": "octocat",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "githubRepo",
+              "value": "Hello-World",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "discordWebhookUrl",
+              "value": "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "geminiModel",
+              "value": "gemini-3.8-flash",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "bootstrapBatchSize",
+              "value": 5,
+              "type": "number"
+            },
+            {
+              "id": "c6",
+              "name": "maxHistory",
+              "value": 1000,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-03-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        420,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.githubOwner }}/{{ $json.githubRepo }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "LeadSniper-n8n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-04-get-repo-info",
+      "name": "Get Repo Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "githubApi": {
+          "id": "GITHUB_API_CREDENTIAL",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const repoInfo = $json;\nconst config = $('Config').first().json;\nconst count = Number(repoInfo.stargazers_count) || 0;\nconst perPage = 100;\nconst lastPage = Math.max(1, Math.ceil(count / perPage));\n\n// Boundary safety: if within 10 stars of page boundary, check both previous and current last page\nconst pagesToFetch = [];\nif (lastPage > 1 && (count % perPage) > 0 && (count % perPage) <= 10) {\n  pagesToFetch.push(lastPage - 1);\n}\npagesToFetch.push(lastPage);\n\nreturn pagesToFetch.map(page => ({\n  json: {\n    githubOwner: config.githubOwner,\n    githubRepo: config.githubRepo,\n    bootstrapBatchSize: config.bootstrapBatchSize || 5,\n    maxHistory: config.maxHistory || 1000,\n    stargazers_count: count,\n    targetPage: page,\n    perPage: perPage\n  }\n}));"
+      },
+      "id": "node-05-calc-stargazer-page",
+      "name": "Calculate Stargazer Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.githubOwner }}/{{ $json.githubRepo }}/stargazers",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "={{ $json.perPage }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.targetPage }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.star+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "LeadSniper-n8n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-06-fetch-stargazers",
+      "name": "Fetch Stargazers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "githubApi": {
+          "id": "GITHUB_API_CREDENTIAL",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Delta Detection & Persistent State Node\n * Reads persistent state via $getWorkflowStaticData('global')\n * Filters incoming stargazers to emit only genuinely new leads\n */\nconst staticData = $getWorkflowStaticData('global');\nstaticData.lastProcessedStarredAt = staticData.lastProcessedStarredAt || null;\nstaticData.processedUserIds = staticData.processedUserIds || [];\n\nconst rawItems = $input.all();\nconst config = $('Config').first().json;\nconst bootstrapLimit = Number(config.bootstrapBatchSize) || 5;\nconst maxHistory = Number(config.maxHistory) || 1000;\n\n// Flatten stargazers list across fetched pages\nlet stargazers = [];\nfor (const item of rawItems) {\n  if (Array.isArray(item.json)) {\n    stargazers.push(...item.json);\n  } else if (item.json && item.json.user && item.json.starred_at) {\n    stargazers.push(item.json);\n  }\n}\n\n// Deduplicate raw array by user.id and sort chronologically ascending\nconst uniqueMap = new Map();\nfor (const star of stargazers) {\n  if (star.user && star.user.id) {\n    uniqueMap.set(star.user.id, star);\n  }\n}\nconst sortedStars = Array.from(uniqueMap.values()).sort(\n  (a, b) => new Date(a.starred_at) - new Date(b.starred_at)\n);\n\nconst processedSet = new Set(staticData.processedUserIds);\nconst newLeads = [];\nlet latestTimestamp = staticData.lastProcessedStarredAt;\n\nif (!staticData.lastProcessedStarredAt) {\n  // Initial Run: Bootstrap up to the latest batch\n  const batch = sortedStars.slice(-bootstrapLimit);\n  for (const star of batch) {\n    if (star.user && !processedSet.has(star.user.id)) {\n      newLeads.push(star);\n      processedSet.add(star.user.id);\n      if (!latestTimestamp || new Date(star.starred_at) > new Date(latestTimestamp)) {\n        latestTimestamp = star.starred_at;\n      }\n    }\n  }\n} else {\n  // Subsequent Runs: Strictly new stars\n  const lastCutoff = new Date(staticData.lastProcessedStarredAt);\n  for (const star of sortedStars) {\n    if (!star.user) continue;\n    const starTime = new Date(star.starred_at);\n    const isNew = starTime > lastCutoff;\n    const notSeen = !processedSet.has(star.user.id);\n\n    if (isNew && notSeen) {\n      newLeads.push(star);\n      processedSet.add(star.user.id);\n      if (!latestTimestamp || starTime > new Date(latestTimestamp)) {\n        latestTimestamp = star.starred_at;\n      }\n    }\n  }\n}\n\n// Cap history to maxHistory\nlet updatedIds = Array.from(processedSet);\nif (updatedIds.length > maxHistory) {\n  updatedIds = updatedIds.slice(-maxHistory);\n}\n\n// Commit persistent state\nstaticData.lastProcessedStarredAt = latestTimestamp;\nstaticData.processedUserIds = updatedIds;\n\n// Return each new stargazer as a separate n8n item\nreturn newLeads.map(lead => ({\n  json: {\n    starred_at: lead.starred_at,\n    login: lead.user.login,\n    id: lead.user.id,\n    avatar_url: lead.user.avatar_url,\n    html_url: lead.user.html_url\n  }\n}));"
+      },
+      "id": "node-07-filter-new-stargazers",
+      "name": "Filter New Stargazers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/users/{{ $json.login }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "LeadSniper-n8n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-08-fetch-user-profile",
+      "name": "Fetch User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "githubApi": {
+          "id": "GITHUB_API_CREDENTIAL",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "login",
+              "value": "={{ $json.login }}",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "p3",
+              "name": "name",
+              "value": "={{ $json.name || $json.login }}",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "company",
+              "value": "={{ $json.company || 'Not specified' }}",
+              "type": "string"
+            },
+            {
+              "id": "p5",
+              "name": "bio",
+              "value": "={{ $json.bio || 'Not specified' }}",
+              "type": "string"
+            },
+            {
+              "id": "p6",
+              "name": "location",
+              "value": "={{ $json.location || 'Remote / Unspecified' }}",
+              "type": "string"
+            },
+            {
+              "id": "p7",
+              "name": "followers",
+              "value": "={{ Number($json.followers) || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "p8",
+              "name": "public_repos",
+              "value": "={{ Number($json.public_repos) || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "p9",
+              "name": "html_url",
+              "value": "={{ $json.html_url }}",
+              "type": "string"
+            },
+            {
+              "id": "p10",
+              "name": "avatar_url",
+              "value": "={{ $json.avatar_url }}",
+              "type": "string"
+            },
+            {
+              "id": "p11",
+              "name": "starred_at",
+              "value": "={{ $('Filter New Stargazers').item.json.starred_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-09-normalize-profile",
+      "name": "Normalize Profile Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1740,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_followers",
+              "leftValue": "={{ $json.followers }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "c_repos",
+              "leftValue": "={{ $json.public_repos }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "node-10-qualification-filter",
+      "name": "Qualification Filter (followers > 100 OR repos > 50)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1960,
+        340
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "node-11-stop-unqualified",
+      "name": "Stop - Unqualified Lead",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2220,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Config').first().json.geminiModel || 'gemini-3.8-flash' }}:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ system_instruction: { parts: [{ text: 'You are a B2B sales intelligence analyst. Analyze the following GitHub lead and generate EXACTLY ONE punchy, compelling sentence explaining why they could be a valuable lead based on their technical activity, company, or follower reach. Never produce more than one sentence. Do not include quotes, markdown bolding, or conversational preambles.' }] }, contents: [{ parts: [{ text: `GitHub Login: ${$json.login}\\nName: ${$json.name}\\nCompany: ${$json.company}\\nBio: ${$json.bio}\\nFollowers: ${$json.followers}\\nPublic Repos: ${$json.public_repos}\\nLocation: ${$json.location}` }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 1024 } }) }}",
+        "options": {}
+      },
+      "id": "node-12-generate-gemini-pitch",
+      "name": "Generate AI Lead Pitch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GEMINI_PALM_API_CREDENTIAL",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Gemini Pitch Post-Processor & Enforcer (Run Once for Each Item)\n * Uses n8n paired item resolution so filtered items never misalign.\n * Strictly enforces Requirement 7: Exactly one sentence.\n */\nconst orig = $('Normalize Profile Data').item.json;\nconst rawCandidate = $json?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n\nlet cleaned = rawCandidate\n  .replace(/^[\\\"'`\\s]+|[\\\"'`\\s]+$/g, '')\n  .replace(/\\*\\*/g, '')\n  .replace(/\\n+/g, ' ')\n  .replace(/^(Here is (why|the|a).*?:|Why they are a lead:|Lead analysis:|Reason:)\\s*/i, '')\n  .trim();\n\n// Extract strictly the first complete sentence\nconst sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/);\nif (sentenceMatch && sentenceMatch[1]) {\n  cleaned = sentenceMatch[1].trim();\n} else if (cleaned.length > 0 && !/[.!?]$/.test(cleaned)) {\n  cleaned += '.';\n}\n\n// Safe fallback if LLM response is empty or invalid\nif (!cleaned) {\n  const title = orig.company && orig.company !== 'Not specified' ? `at ${orig.company}` : 'in the developer ecosystem';\n  cleaned = `${orig.name || orig.login} is a high-impact engineer ${title} with ${orig.followers} followers and ${orig.public_repos} public repositories.`;\n}\n\nreturn {\n  json: {\n    ...orig,\n    ai_pitch: cleaned\n  }\n};"
+      },
+      "id": "node-13-sanitize-pitch",
+      "name": "Sanitize & Enforce Single Sentence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Format Discord Rich Embed (Run Once for Each Item)\n * Formats the qualified lead and Gemini pitch into a structured Discord embed\n */\nconst lead = $json;\nconst config = $('Config').first().json;\n\nconst payload = {\n  username: 'Lead Sniper Bot',\n  avatar_url: 'https://cdn-icons-png.flaticon.com/512/3242/3242257.png',\n  embeds: [\n    {\n      title: `🎯 High-Value GitHub Lead: @${lead.login}`,\n      url: lead.html_url || `https://github.com/${lead.login}`,\n      color: 3066993,\n      author: {\n        name: `${lead.name || lead.login} (@${lead.login})`,\n        url: lead.html_url || `https://github.com/${lead.login}`,\n        icon_url: lead.avatar_url || ''\n      },\n      thumbnail: {\n        url: lead.avatar_url || ''\n      },\n      description: `💡 **AI Lead Angle:**\\n${lead.ai_pitch}`,\n      fields: [\n        {\n          name: '🏢 Company',\n          value: lead.company && lead.company !== 'Not specified' ? lead.company : 'Not specified',\n          inline: true\n        },\n        {\n          name: '👥 Followers',\n          value: String(lead.followers ?? 0),\n          inline: true\n        },\n        {\n          name: '📦 Public Repos',\n          value: String(lead.public_repos ?? 0),\n          inline: true\n        },\n        {\n          name: '📍 Location',\n          value: lead.location && lead.location !== 'Remote / Unspecified' ? lead.location : 'Remote / Unspecified',\n          inline: true\n        },\n        {\n          name: '📝 Bio',\n          value: lead.bio && lead.bio !== 'Not specified' ? lead.bio : 'No bio provided',\n          inline: false\n        }\n      ],\n      footer: {\n        text: `Lead Sniper • Target: ${config.githubOwner}/${config.githubRepo}`\n      },\n      timestamp: new Date().toISOString()\n    }\n  ]\n};\n\nreturn {\n  json: {\n    ...lead,\n    discord_payload: payload\n  }\n};"
+      },
+      "id": "node-14-format-discord-embed",
+      "name": "Format Discord Embed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.discordWebhookUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.discord_payload) }}",
+        "options": {}
+      },
+      "id": "node-15-send-discord-notification",
+      "name": "Send Discord Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2900,
+        240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Audit Log & State Confirmation Node (Run Once for Each Item)\n * Confirms delivery of each individual lead via paired item reference\n */\nconst lead = $('Format Discord Embed').item.json;\nreturn {\n  json: {\n    status: 'NOTIFIED',\n    dispatched_at: new Date().toISOString(),\n    starred_at: lead.starred_at,\n    lead_id: lead.id,\n    login: lead.login,\n    followers: lead.followers,\n    public_repos: lead.public_repos,\n    company: lead.company,\n    ai_pitch: lead.ai_pitch\n  }\n};"
+      },
+      "id": "node-16-audit-commit-log",
+      "name": "Audit & Commit Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "node-17-error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        180,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Global Error Handler Node\n * Captures uncaught runtime failures and logs actionable diagnostic context\n */\nconst errorData = $json;\nconsole.error('Lead Sniper Execution Failure:', JSON.stringify(errorData, null, 2));\nreturn [{\n  json: {\n    status: 'EXECUTION_ERROR',\n    timestamp: new Date().toISOString(),\n    message: errorData.execution?.error?.message || 'Unknown error occurred',\n    failed_node: errorData.execution?.lastNodeExecuted || 'Unknown'\n  }\n}];"
+      },
+      "id": "node-18-log-workflow-error",
+      "name": "Log Workflow Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        640
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (Every 15m)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get Repo Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Repo Info": {
+      "main": [
+        [
+          {
+            "node": "Calculate Stargazer Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Stargazer Page": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stargazers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stargazers": {
+      "main": [
+        [
+          {
+            "node": "Filter New Stargazers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Stargazers": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Profile": {
+      "main": [
+        [
+          {
+            "node": "Normalize Profile Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Profile Data": {
+      "main": [
+        [
+          {
+            "node": "Qualification Filter (followers > 100 OR repos > 50)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualification Filter (followers > 100 OR repos > 50)": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Lead Pitch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop - Unqualified Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Lead Pitch": {
+      "main": [
+        [
+          {
+            "node": "Sanitize & Enforce Single Sentence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize & Enforce Single Sentence": {
+      "main": [
+        [
+          {
+            "node": "Format Discord Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Discord Embed": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Notification": {
+      "main": [
+        [
+          {
+            "node": "Audit & Commit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "starred_at": "2026-11-10T10:00:00Z",
+    "user": {
+      "login": "octocat-dev",
+      "id": 1001,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+      "html_url": "https://github.com/octocat-dev"
+    }
+  },
+  {
+    "starred_at": "2026-11-10T11:30:00Z",
+    "user": {
+      "login": "tech-lead-sarah",
+      "id": 1002,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1002?v=4",
+      "html_url": "https://github.com/tech-lead-sarah"
+    }
+  },
+  {
+    "starred_at": "2026-11-10T14:15:00Z",
+    "user": {
+      "login": "alex-coder",
+      "id": 1003,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?v=4",
+      "html_url": "https://github.com/alex-coder"
+    }
+  },
+  {
+    "starred_at": "2026-11-11T09:00:00Z",
+    "user": {
+      "login": "cto-dan",
+      "id": 1004,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?v=4",
+      "html_url": "https://github.com/cto-dan"
+    }
+  },
+  {
+    "starred_at": "2026-11-11T16:45:00Z",
+    "user": {
+      "login": "novice-user",
+      "id": 1005,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1005?v=4",
+      "html_url": "https://github.com/novice-user"
+    }
+  }
+]
+
